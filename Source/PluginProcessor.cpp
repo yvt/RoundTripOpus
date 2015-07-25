@@ -217,6 +217,7 @@ RoundTripOpusAudioProcessor::RoundTripOpusAudioProcessor()
 		s = nullptr;
 	
 	resolvingUnderrun = false;
+	resolvingOverrun = false;
 	
 	fifo1.reset(new AudioFifo(4096));
 	fifo2.reset(new AudioFifo(16384));
@@ -315,6 +316,8 @@ float RoundTripOpusAudioProcessor::getParameter (int index)
 
 void RoundTripOpusAudioProcessor::setParameter (int index, float newValue)
 {
+	std::lock_guard<std::mutex> lock(objLock);
+	
 	int rounded = roundFloatToInt(newValue);
 	
 	switch ((Parameter)index) {
@@ -375,17 +378,21 @@ void RoundTripOpusAudioProcessor::setParameter (int index, float newValue)
 		case Parameter::FrameSize:
 			newValue *= 60.f;
 			if (newValue < 4.f) {
-				opusFrameSizeTime = 25;
+				rounded = 25;
 			} else if (newValue < 7.5f) {
-				opusFrameSizeTime = 50;
+				rounded = 50;
 			} else if (newValue < 15.f) {
-				opusFrameSizeTime = 100;
+				rounded = 100;
 			} else if (newValue < 30.f) {
-				opusFrameSizeTime = 200;
+				rounded = 200;
 			} else if (newValue < 40.f) {
-				opusFrameSizeTime = 400;
+				rounded = 400;
 			} else {
-				opusFrameSizeTime = 600;
+				rounded = 600;
+			}
+			if (rounded != opusFrameSizeTime) {
+				opusFrameSizeTime = rounded;
+				invalidateOpusCodec();
 			}
 			break;
 	}
@@ -533,6 +540,8 @@ void RoundTripOpusAudioProcessor::releaseResources()
 
 void RoundTripOpusAudioProcessor::processBlock (AudioSampleBuffer& buffer, MidiBuffer& midiMessages)
 {
+	std::lock_guard<std::mutex> lock(objLock);
+	
 	// make sure number of channel matches
 	if (getNumInputChannels() != opusNumChannels) {
 		opusNumChannels = getNumInputChannels();
@@ -577,10 +586,14 @@ void RoundTripOpusAudioProcessor::processBlock (AudioSampleBuffer& buffer, MidiB
 	opusInputBuffer.resize(opusFrameSize * opusNumChannels * 4);
 	opusOutputBuffer.resize(65536);
 	
-	for (std::size_t i = 0; i < numSamples && writeIndex < numSamples;) {
+	std::size_t i = 0;
+	
+	for (; i < numSamples || writeIndex < numSamples;) {
 		bool stall = true;
 		
-		{
+		if (!resolvingOverrun ||
+			fifo1->getNumberOfSamplesEnqueueable() > 2048) {
+			resolvingOverrun = false;
 			AudioFifo::ConstBufferSet inputBufferSet;
 			for (std::size_t j = 0; j < 2; ++j) {
 				inputBufferSet[j] = j < numChannels ?
@@ -590,6 +603,9 @@ void RoundTripOpusAudioProcessor::processBlock (AudioSampleBuffer& buffer, MidiB
 			i += inputSunk;
 			if (inputSunk)
 				stall = false;
+		} else if (i < numSamples) {
+			stall = false;
+			i = std::min(i + 2048, numSamples);
 		}
 		
 		// input SRC
@@ -725,10 +741,17 @@ void RoundTripOpusAudioProcessor::processBlock (AudioSampleBuffer& buffer, MidiB
 			
 			if (outputSunk)
 				stall = false;
+		} else if (writeIndex < numSamples) {
+			stall = false;
+			writeIndex = std::min(writeIndex + 2048, numSamples);
 		}
 		
 		if (stall)
 			break;
+	}
+	
+	if (i < numSamples) {
+		resolvingOverrun = true;
 	}
 	
 	if (writeIndex < numSamples) {

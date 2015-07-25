@@ -17,7 +17,7 @@
 #include <vector>
 #include <cstdint>
 #include <memory>
-
+#include <mutex>
 
 
 //==============================================================================
@@ -53,6 +53,8 @@ private:
 	
 	SRC_STATE *srcState[4];
 	
+	std::mutex objLock;
+	
 	OpusEncoder *opusEncoder;
 	OpusDecoder *opusDecoder;
 	
@@ -65,6 +67,7 @@ private:
 	int opusComplexity;
 	Signal opusSignal;
 	
+	bool resolvingOverrun;
 	bool resolvingUnderrun;
 	
 	using AudioFifo = Fifo<float, 2>;
