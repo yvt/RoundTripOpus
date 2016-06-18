@@ -45,3 +45,10 @@ GPLv3
 * [libopus](http://opus-codec.org/downloads/)
 * [Secret Rabbit Code](http://www.mega-nerd.com/SRC/) a.k.a. libsamplerate
 
+インストール方法
+----------------
+
+### Mac OS X
+
+- Audio Unit: `RoundTripOpus.component` を `/Users/ユーザ名/Library/Audio/Plug-Ins/Components` にコピーして下さい。
+- VST:  `RoundTripOpus.vst` を `/Users/ユーザ名/Library/Audio/Plug-Ins/VST` にコピーして下さい。
