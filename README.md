@@ -50,5 +50,7 @@ GPLv3
 
 ### Mac OS X
 
+最初に、付属の `libsamplerate.0.dylib` を `/usr/local/lib` にコピーする必要があります。
+
 - Audio Unit: `RoundTripOpus.component` を `/Users/ユーザ名/Library/Audio/Plug-Ins/Components` にコピーして下さい。
 - VST:  `RoundTripOpus.vst` を `/Users/ユーザ名/Library/Audio/Plug-Ins/VST` にコピーして下さい。
